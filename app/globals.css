@@ -141,3 +141,63 @@ html.lenis, html.lenis body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Page Transitions */
+.page-transitioning .page-container {
+  animation: pageOut 0.3s ease-out forwards;
+}
+
+.page-enter {
+  animation: pageIn 0.4s ease-out forwards;
+}
+
+@keyframes pageOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes pageIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header card morph effect */
+.page-transitioning [data-transition="header"] {
+  animation: headerOut 0.3s ease-out forwards;
+}
+
+.page-enter [data-transition="header"] {
+  animation: headerIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes headerOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes headerIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
