@@ -378,7 +378,7 @@ export default function Home() {
                           </h2>
                         </div>
                         <div className="h-[1px] w-10 md:w-14 bg-white/20 mx-auto md:mx-0"></div>
-                        <p className="text-sm md:text-base opacity-60 leading-relaxed line-clamp-4 md:line-clamp-6">
+                        <p className="text-sm md:text-base opacity-60 leading-relaxed line-clamp-4 md:line-clamp-6 w-80">
                           {getImageInfo(image).description}
                         </p>
                         {getImageInfo(image).date && (
