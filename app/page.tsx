@@ -175,24 +175,24 @@ export default function Home() {
     
     <div className="bg-pink-100/90">
 
-      <div className="min-h-[5vh]"></div>
-      <div className="flex min-h-[90vh] items-center justify-center mr-10 ml-10 font-sans bg-white rounded-[5vh]">
+      <div className="min-h-[2vh] md:min-h-[5vh]"></div>
+      <div className="flex min-h-[80vh] md:min-h-[90vh] items-center justify-center mx-4 md:mx-10 font-sans bg-white rounded-[3vh] md:rounded-[5vh]">
 
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-center md:text-left">
           
           {/* Image */}
           <img
             src="https://cdn.discordapp.com/emojis/1407426214548738048.webp?animated=true"
-            className="w-[6vw] min-w-[40px]"
+            className="w-[20vw] md:w-[6vw] min-w-[60px] md:min-w-[40px]"
             alt=""
           />
 
           {/* Text column */}
           <div className="flex flex-col">
-            <p className="text-[2vw] leading-none font-semibold">
+            <p className="text-[8vw] md:text-[2vw] leading-none font-semibold">
               ESTELLEO
             </p>
-            <p className="text-[1vw] opacity-70">
+            <p className="text-[3.5vw] md:text-[1vw] opacity-70 mt-2 md:mt-0">
               ★ ! 2007  ·  <u>Artist</u>  ˙  ENFJ 
             </p>
           </div>
@@ -205,23 +205,23 @@ export default function Home() {
       <div ref={containerRef} className="h-[200vh] md:h-[300vh] relative">
         <div className="sticky top-0 h-screen overflow-hidden flex flex-col justify-center">
 
-          <div className="absolute top-4 md:top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10">
+          <div className="absolute top-8 md:top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10 w-full justify-center">
             
-            <span className="text-[10px] md:text-[0.7vw] opacity-40 font-mono">------- FEATURED ARTS -------</span>
+            <span className="text-[10px] md:text-[0.7vw] opacity-40 font-mono tracking-widest">------- FEATURED ARTS -------</span>
           </div>
 
           <div 
             ref={galleryRef} 
-            className="flex gap-4 md:gap-8 px-4 md:px-10 will-change-transform"
+            className="flex gap-4 md:gap-8 px-4 md:px-10 will-change-transform items-center h-full"
             style={{ transition: "transform 0.1s cubic-bezier(0.33, 1, 0.68, 1)" }}
           >
             {featuredImages.map((image, index) => (
-              <div key={image} className="flex-shrink-0 rounded-lg overflow-hidden group relative">
+              <div key={image} className="flex-shrink-0 rounded-lg overflow-hidden group relative first:ml-0">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-[3vh] md:rounded-[5vh]"></div>
                 <img 
                   src={`/imgs/featured/${image}`} 
                   alt={`artwork-${index + 1}`}
-                  className="h-[60vh] md:h-[85vh] w-auto object-cover rounded-[3vh] md:rounded-[5vh] transition-transform duration-700" 
+                  className="h-[50vh] md:h-[85vh] w-auto object-cover rounded-[3vh] md:rounded-[5vh] transition-transform duration-700 shadow-sm" 
                 />
               </div>
             ))}
@@ -230,9 +230,9 @@ export default function Home() {
       </div>
 
       {/* Footer Section */}
-      <div className="flex flex-col min-h-[60vh] md:min-h-[40vh] justify-center font-sans mx-4 md:mx-10 bg-white rounded-[3vh] md:rounded-[5vh] relative overflow-hidden py-8 md:py-0">
-        <div className="flex flex-col items-center">
-          <div className="flex gap-5 text-[1vw] items-center opacity-80">
+      <div className="flex flex-col min-h-[30vh] md:min-h-[40vh] justify-center font-sans mx-4 md:mx-10 bg-white rounded-[3vh] md:rounded-[5vh] relative overflow-hidden py-8 md:py-0 mb-8">
+        <div className="flex flex-col items-center px-4 text-center">
+          <div className="flex gap-5 text-sm md:text-[1vw] items-center opacity-80">
             DM me at <u>@estelleo</u> in discord for commissions.
           </div>
         </div>
@@ -310,15 +310,15 @@ export default function Home() {
               let styles = "";
               
               if (offset === 0) {
-                // Center - shifted left to make room for description
-                // Using fixed left positioning for stability
+                // Center - shifted left to make room for description on desktop
+                // On mobile: centered
                 styles = "z-30 opacity-100 scale-100 left-1/2 md:left-[40%]";
               } else if (offset === -1) {
                 // Left - fixed position near left edge
-                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[10%] md:left-[0%]";
+                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[10%] md:left-[0%] hidden md:flex";
               } else if (offset === 1) {
                 // Right - fixed position near right edge
-                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[90%] md:left-[100%]";
+                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[90%] md:left-[100%] hidden md:flex";
               } else if (offset === -2) {
                 // Far Left (hidden)
                 styles = "z-10 opacity-0 scale-50 left-[-20%]";
@@ -337,32 +337,42 @@ export default function Home() {
                   }}
                 >
                   {/* Image Container */}
-                  <div className="relative shadow-2xl">
+                  <div className="relative shadow-2xl flex flex-col items-center">
                     <img
                       src={`/imgs/${image}`}
                       alt="artwork"
-                      className="max-h-[50vh] md:max-h-[80vh] max-w-[70vw] md:max-w-[45vw] object-contain rounded-xl md:rounded-2xl bg-black/20"
+                      className="max-h-[60vh] md:max-h-[80vh] max-w-[90vw] md:max-w-[45vw] object-contain rounded-xl md:rounded-2xl bg-black/20"
                     />
                     
-                    {/* Description Panel - Only visible when center */}
+                    {/* Description Panel */}
                     <div 
-                      className={`absolute top-1/2 -translate-y-1/2 left-full ml-4 md:ml-8 w-[50vw] md:w-[22vw] text-left transition-all duration-500 delay-100 ${
-                        offset === 0 ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10 pointer-events-none"
-                      }`}
+                      className={`
+                        transition-all duration-500 delay-100
+                        ${offset === 0 ? "opacity-100 translate-y-0 md:translate-x-0" : "opacity-0 translate-y-10 md:-translate-x-10 pointer-events-none"}
+                        
+                        /* Mobile Styles: Bottom Sheet */
+                        fixed bottom-0 left-0 w-full p-6 pb-10
+                        bg-gradient-to-t from-black via-black/90 to-transparent
+                        text-center flex flex-col items-center
+                        
+                        /* Desktop Styles: Side Panel */
+                        md:absolute md:top-1/2 md:bottom-auto md:left-full md:right-auto 
+                        md:-translate-y-1/2 md:ml-8 md:w-[22vw] md:bg-none md:p-0 md:text-left md:items-start
+                      `}
                     >
-                      <div className="flex flex-col gap-3 md:gap-5 text-white">
+                      <div className="flex flex-col gap-2 md:gap-5 text-white w-full max-w-md md:max-w-none mx-auto">
                         <div className="flex flex-col gap-1 md:gap-2">
                           <span className="text-[10px] md:text-xs opacity-40 tracking-widest uppercase">Artwork</span>
-                          <h2 className="text-lg md:text-2xl font-light tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
+                          <h2 className="text-xl md:text-2xl font-light tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
                             {getImageInfo(image).title}
                           </h2>
                         </div>
-                        <div className="h-[1px] w-10 md:w-14 bg-white/20"></div>
-                        <p className="text-sm md:text-base opacity-60 leading-relaxed line-clamp-6 w-90">
+                        <div className="h-[1px] w-10 md:w-14 bg-white/20 mx-auto md:mx-0"></div>
+                        <p className="text-sm md:text-base opacity-60 leading-relaxed line-clamp-4 md:line-clamp-6">
                           {getImageInfo(image).description}
                         </p>
                         {getImageInfo(image).date && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 justify-center md:justify-start">
                             <div className="w-1.5 h-1.5 rounded-full bg-pink-400/60"></div>
                             <span className="text-xs md:text-sm opacity-40">
                               {getImageInfo(image).date}

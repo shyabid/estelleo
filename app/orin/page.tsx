@@ -7,7 +7,7 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [descriptions, setDescriptions] = useState<Record<string, any>>({});
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", date: "" });
@@ -47,11 +47,14 @@ export default function AdminPage() {
   // Upload handler
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadFile) return;
+    if (!uploadFiles || uploadFiles.length === 0) return;
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append("file", uploadFile);
+    
+    for (let i = 0; i < uploadFiles.length; i++) {
+      formData.append("files", uploadFiles[i]);
+    }
     formData.append("type", "all");
 
     try {
@@ -61,7 +64,7 @@ export default function AdminPage() {
       });
       
       if (res.ok) {
-        setUploadFile(null);
+        setUploadFiles(null);
         // Reset file input
         const fileInput = document.getElementById("file-upload") as HTMLInputElement;
         if (fileInput) fileInput.value = "";
@@ -158,12 +161,13 @@ export default function AdminPage() {
         {/* Upload Section */}
         <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
           <h2 className="text-lg font-medium mb-4">Upload New Artwork</h2>
-          <form onSubmit={handleUpload} className="flex gap-4 items-center">
+          <form onSubmit={handleUpload} className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <input
               id="file-upload"
               type="file"
               accept="image/*"
-              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              multiple
+              onChange={(e) => setUploadFiles(e.target.files)}
               className="block w-full text-sm text-slate-500
                 file:mr-4 file:py-2 file:px-4
                 file:rounded-full file:border-0
@@ -173,8 +177,8 @@ export default function AdminPage() {
             />
             <button
               type="submit"
-              disabled={!uploadFile || isUploading}
-              className="px-6 py-2 bg-black text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-colors whitespace-nowrap"
+              disabled={!uploadFiles || isUploading}
+              className="w-full md:w-auto px-6 py-2 bg-black text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-colors whitespace-nowrap"
             >
               {isUploading ? "Uploading..." : "Upload"}
             </button>

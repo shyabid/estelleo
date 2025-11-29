@@ -6,15 +6,12 @@ import { writeFile } from "fs/promises";
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const files = formData.getAll("files") as File[];
     const type = formData.get("type") as string || "all"; // 'all' (default gallery) or 'featured'
 
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (!files || files.length === 0) {
+      return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
     }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
 
     // Determine directory
     const uploadDir = type === "featured" 
@@ -26,13 +23,21 @@ export async function POST(request: Request) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    // Sanitize filename
-    const filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "");
-    const filePath = path.join(uploadDir, filename);
+    const uploadedFilenames = [];
 
-    await writeFile(filePath, buffer);
+    for (const file of files) {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
 
-    return NextResponse.json({ success: true, filename });
+      // Sanitize filename
+      const filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "");
+      const filePath = path.join(uploadDir, filename);
+
+      await writeFile(filePath, buffer);
+      uploadedFilenames.push(filename);
+    }
+
+    return NextResponse.json({ success: true, filenames: uploadedFilenames });
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
