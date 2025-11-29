@@ -80,6 +80,63 @@ export default function AdminPage() {
     }
   };
 
+  // Delete handler
+  const handleDelete = async (filename: string) => {
+    if (!confirm("Are you sure you want to delete this image?")) return;
+
+    try {
+      const res = await fetch("/api/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename }),
+      });
+
+      if (res.ok) {
+        setImages(images.filter(img => img !== filename));
+        const newDescriptions = { ...descriptions };
+        delete newDescriptions[filename];
+        setDescriptions(newDescriptions);
+      } else {
+        alert("Failed to delete");
+      }
+    } catch (error) {
+      console.error("Delete error", error);
+      alert("Delete error");
+    }
+  };
+
+  // Reorder handler
+  const handleMove = async (index: number, direction: "up" | "down") => {
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === images.length - 1) return;
+
+    const newImages = [...images];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    
+    // Swap images
+    [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]];
+    setImages(newImages);
+
+    // Update orders in descriptions
+    const newDescriptions = { ...descriptions };
+    newImages.forEach((img, idx) => {
+      if (!newDescriptions[img]) newDescriptions[img] = {};
+      newDescriptions[img].order = idx;
+    });
+    setDescriptions(newDescriptions);
+
+    // Save new order
+    try {
+      await fetch("/api/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newDescriptions),
+      });
+    } catch (error) {
+      console.error("Failed to save order", error);
+    }
+  };
+
   // Edit handler
   const startEdit = (image: string) => {
     setEditingId(image);
@@ -240,19 +297,46 @@ export default function AdminPage() {
                     <h3 className="font-medium truncate pr-2">
                       {descriptions[image]?.title || image}
                     </h3>
-                    <button
-                      onClick={() => startEdit(image)}
-                      className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => startEdit(image)}
+                        className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(image)}
+                        className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200"
+                      >
+                        Del
+                      </button>
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500 line-clamp-2">
                     {descriptions[image]?.description || "No description"}
                   </p>
-                  <p className="text-xs text-gray-400 mt-auto">
-                    {descriptions[image]?.date || "-"}
-                  </p>
+                  
+                  <div className="mt-auto flex justify-between items-end">
+                    <p className="text-xs text-gray-400">
+                      {descriptions[image]?.date || "-"}
+                    </p>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => handleMove(images.indexOf(image), "up")}
+                        disabled={images.indexOf(image) === 0}
+                        className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button 
+                        onClick={() => handleMove(images.indexOf(image), "down")}
+                        disabled={images.indexOf(image) === images.length - 1}
+                        className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
