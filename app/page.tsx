@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import Lenis from "lenis";
+import ProgressiveImage from "@/components/ProgressiveImage";
 
 export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -14,7 +15,13 @@ export default function Home() {
 
   const [images, setImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [imageDescriptions, setImageDescriptions] = useState<Record<string, { title?: string; description: string; date?: string }>>({});
+  const [imageDescriptions, setImageDescriptions] = useState<Record<string, { 
+    title?: string; 
+    description: string; 
+    date?: string;
+    color?: string;
+    blurDataUrl?: string;
+  }>>({});
 
   // Helper to calculate circular distance for the carousel
   const getDistanceFromCenter = (index: number, centerIndex: number, total: number) => {
@@ -251,13 +258,16 @@ export default function Home() {
               onClick={() => setSelectedImage(image)}
             >
               <div className="relative overflow-hidden rounded-xl md:rounded-2xl bg-white p-1 md:p-2">
-                <div className="absolute inset-1 md:inset-2 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-lg md:rounded-xl"></div>
-                <img
+                <div className="absolute inset-1 md:inset-2 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-lg md:rounded-xl pointer-events-none"></div>
+                
+                <ProgressiveImage
                   src={`/imgs/${image}`}
+                  placeholderColor={imageDescriptions[image]?.color}
+                  blurDataUrl={imageDescriptions[image]?.blurDataUrl}
                   alt={`artwork-${index + 1}`}
-                  className="w-full h-auto object-cover rounded-lg md:rounded-xl transition-transform duration-700 group-hover:scale-[1.02]"
-                  loading="lazy"
+                  className="w-full h-auto rounded-lg md:rounded-xl transition-transform duration-700 group-hover:scale-[1.02]"
                 />
+
                 {/* Hover overlay with number */}
                 <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
                   <span className="text-white text-[10px] md:text-xs font-mono bg-black/30 px-1.5 md:px-2 py-0.5 md:py-1 rounded-full backdrop-blur-sm">
