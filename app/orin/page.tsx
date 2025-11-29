@@ -11,12 +11,13 @@ export default function AdminPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", date: "" });
+  const [activeTab, setActiveTab] = useState<"all" | "featured">("all");
 
   // Fetch data
   const fetchData = async () => {
     try {
       const [imgsRes, descRes] = await Promise.all([
-        fetch("/api/images?type=all"),
+        fetch(`/api/images?type=${activeTab}`),
         fetch("/api/data")
       ]);
       const imgs = await imgsRes.json();
@@ -32,7 +33,7 @@ export default function AdminPage() {
     if (isAuthenticated) {
       fetchData();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, activeTab]);
 
   // Login handler
   const handleLogin = (e: React.FormEvent) => {
@@ -55,7 +56,7 @@ export default function AdminPage() {
     for (let i = 0; i < uploadFiles.length; i++) {
       formData.append("files", uploadFiles[i]);
     }
-    formData.append("type", "all");
+    formData.append("type", activeTab);
 
     try {
       const res = await fetch("/api/upload", {
@@ -88,7 +89,7 @@ export default function AdminPage() {
       const res = await fetch("/api/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
+        body: JSON.stringify({ filename, type: activeTab }),
       });
 
       if (res.ok) {
@@ -207,6 +208,20 @@ export default function AdminPage() {
     <div className="min-h-screen bg-pink-50/50 p-4 md:p-10 font-sans">
       <div className="max-w-6xl mx-auto">
         <header className="flex justify-between items-center mb-10">
+          <div className="flex gap-4">
+            <button 
+              onClick={() => setActiveTab("all")}
+              className={`text-lg font-medium transition-colors ${activeTab === "all" ? "text-black" : "text-gray-400 hover:text-gray-600"}`}
+            >
+              Gallery
+            </button>
+            <button 
+              onClick={() => setActiveTab("featured")}
+              className={`text-lg font-medium transition-colors ${activeTab === "featured" ? "text-black" : "text-gray-400 hover:text-gray-600"}`}
+            >
+              Featured
+            </button>
+          </div>
           <button 
             onClick={() => setIsAuthenticated(false)}
             className="text-sm opacity-50 hover:opacity-100"
@@ -217,7 +232,9 @@ export default function AdminPage() {
 
         {/* Upload Section */}
         <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
-          <h2 className="text-lg font-medium mb-4">Upload New Artwork</h2>
+          <h2 className="text-lg font-medium mb-4">
+            Upload to {activeTab === "all" ? "Gallery" : "Featured"}
+          </h2>
           <form onSubmit={handleUpload} className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <input
               id="file-upload"
@@ -243,12 +260,12 @@ export default function AdminPage() {
         </div>
 
         {/* Gallery Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {images.map((image) => (
             <div key={image} className="bg-white p-4 rounded-2xl shadow-sm flex flex-col gap-4">
               <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
                 <img
-                  src={`/imgs/${image}`}
+                  src={`/imgs/${activeTab === "featured" ? "featured/" : ""}${image}`}
                   alt={image}
                   className="w-full h-full object-cover"
                 />

@@ -325,10 +325,10 @@ export default function Home() {
                 styles = "z-30 opacity-100 scale-100 left-1/2 md:left-[40%]";
               } else if (offset === -1) {
                 // Left - fixed position near left edge
-                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[10%] md:left-[0%] hidden md:flex";
+                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[0%] md:left-[0%] hidden md:flex";
               } else if (offset === 1) {
                 // Right - fixed position near right edge
-                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[90%] md:left-[100%] hidden md:flex";
+                styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[100%] md:left-[100%] hidden md:flex";
               } else if (offset === -2) {
                 // Far Left (hidden)
                 styles = "z-10 opacity-0 scale-50 left-[-20%]";

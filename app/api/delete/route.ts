@@ -6,14 +6,19 @@ const dataPath = path.join(process.cwd(), "data", "images.json");
 
 export async function POST(request: Request) {
   try {
-    const { filename } = await request.json();
+    const { filename, type } = await request.json();
     
     if (!filename) {
       return NextResponse.json({ error: "Filename is required" }, { status: 400 });
     }
 
+    // Determine directory
+    const uploadDir = type === "featured" 
+      ? path.join(process.cwd(), "public", "imgs", "featured")
+      : path.join(process.cwd(), "public", "imgs");
+
     // Delete file
-    const filePath = path.join(process.cwd(), "public", "imgs", filename);
+    const filePath = path.join(uploadDir, filename);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
