@@ -397,7 +397,7 @@ export default function Home() {
                   placeholderColor={imageDescriptions[image]?.color}
                   blurDataUrl={imageDescriptions[image]?.blurDataUrl}
                   alt={`artwork-${index + 1}`}
-                  className="w-full h-auto rounded-lg md:rounded-xl transition-transform duration-700 group-hover:scale-[1.02]"
+                  className="w-full h-auto rounded-lg md:rounded-xl transition-transform duration-700"
                 />
 
                 {/* Hover overlay with number */}
