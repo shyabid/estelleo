@@ -5,16 +5,26 @@ import Lenis from "lenis";
 import ProgressiveImage from "@/components/ProgressiveImage";
 
 export default function Home() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const galleryRef = useRef<HTMLDivElement>(null);
   const gallerySectionRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
   const lastScrollTime = useRef(0);
-  const [scrollProgress, setScrollProgress] = useState(0);
   const [featuredImages, setFeaturedImages] = useState<string[]>([]);
+  
+  // Infinite marquee state
+  const marqueeRef = useRef<HTMLDivElement>(null);
+  const marqueeInnerRef = useRef<HTMLDivElement>(null);
+  const scrollVelocity = useRef(0);
+  const currentTranslate = useRef(0);
+  const animationFrameId = useRef<number>(0);
+  const baseSpeed = 0.5; // Base scroll speed
+  const velocityMultiplier = 3; // How much scroll velocity affects speed
 
   const [images, setImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [hoveredImage, setHoveredImage] = useState<string | null>(null);
+  const [displayedImage, setDisplayedImage] = useState<string | null>(null);
+  const [previousImage, setPreviousImage] = useState<string | null>(null);
+  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [imageDescriptions, setImageDescriptions] = useState<Record<string, { 
     title?: string; 
     description: string; 
@@ -31,6 +41,46 @@ export default function Home() {
     if (diff < -total / 2) diff += total;
     return diff;
   };
+
+  // Handle smooth transitions for atmospheric background
+  useEffect(() => {
+    if (hoveredImage) {
+      // Clear any pending fade out
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+        fadeTimeoutRef.current = null;
+      }
+      
+      // If we have a current displayed image, move it to previous for crossfade
+      if (displayedImage && displayedImage !== hoveredImage) {
+        setPreviousImage(displayedImage);
+      }
+      
+      // Set the new image
+      setDisplayedImage(hoveredImage);
+      
+      // Clear previous image after transition completes
+      setTimeout(() => {
+        setPreviousImage(null);
+      }, 700);
+    } else {
+      // Start fade out with delay
+      fadeTimeoutRef.current = setTimeout(() => {
+        setPreviousImage(displayedImage);
+        setDisplayedImage(null);
+        // Clear previous after fade completes
+        setTimeout(() => {
+          setPreviousImage(null);
+        }, 700);
+      }, 150); // Small delay before starting fade
+    }
+    
+    return () => {
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+      }
+    };
+  }, [hoveredImage]);
 
   // Fetch image descriptions
   useEffect(() => {
@@ -62,6 +112,48 @@ export default function Home() {
       .catch(() => setFeaturedImages([]));
   }, []);
 
+  // Infinite marquee animation
+  useEffect(() => {
+    if (!marqueeInnerRef.current || featuredImages.length === 0) return;
+
+    const marqueeInner = marqueeInnerRef.current;
+    let lastTime = performance.now();
+    
+    const animate = (currentTime: number) => {
+      const deltaTime = (currentTime - lastTime) / 16; // Normalize to ~60fps
+      lastTime = currentTime;
+      
+      // Calculate speed based on base speed + scroll velocity
+      const speed = (baseSpeed + Math.abs(scrollVelocity.current) * velocityMultiplier) * deltaTime;
+      
+      // Update position
+      currentTranslate.current -= speed;
+      
+      // Get the width of one set of images (half the container since we duplicate)
+      const singleSetWidth = marqueeInner.scrollWidth / 2;
+      
+      // Reset when we've scrolled past one full set
+      if (Math.abs(currentTranslate.current) >= singleSetWidth) {
+        currentTranslate.current = 0;
+      }
+      
+      marqueeInner.style.transform = `translateX(${currentTranslate.current}px)`;
+      
+      // Decay velocity
+      scrollVelocity.current *= 0.95;
+      
+      animationFrameId.current = requestAnimationFrame(animate);
+    };
+    
+    animationFrameId.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, [featuredImages]);
+
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
     const lenis = new Lenis({
@@ -79,16 +171,10 @@ export default function Home() {
     }
     requestAnimationFrame(raf);
 
-    // Handle scroll for horizontal gallery
-    const handleScroll = () => {
-      const container = containerRef.current;
-      const gallery = galleryRef.current;
-      if (!container || !gallery) return;
-
-      const rect = container.getBoundingClientRect();
-      const progress = -rect.top / (container.offsetHeight - window.innerHeight);
-      const clampedProgress = Math.max(0, Math.min(1, progress));
-      setScrollProgress(clampedProgress);
+    // Handle scroll for velocity tracking
+    const handleScroll = ({ velocity }: { velocity: number }) => {
+      // Update scroll velocity for marquee effect
+      scrollVelocity.current = velocity;
     };
 
     lenis.on("scroll", handleScroll);
@@ -97,15 +183,6 @@ export default function Home() {
       lenis.destroy();
     };
   }, []);
-
-  // Apply smooth transform to gallery
-  useEffect(() => {
-    const gallery = galleryRef.current;
-    if (!gallery) return;
-
-    const maxScroll = gallery.scrollWidth - window.innerWidth;
-    gallery.style.transform = `translateX(-${scrollProgress * maxScroll}px)`;
-  }, [scrollProgress]);
 
   useEffect(() => {
     fetch("/api/images?type=all")
@@ -180,8 +257,40 @@ export default function Home() {
 
   return (
     
-    <div className="bg-pink-100/90">
+    <div className="bg-pink-100/90 relative min-h-screen">
+      {/* Atmospheric Background - Crossfade Layers */}
+      {/* Previous image layer (fading out) */}
+      {previousImage && (
+        <div 
+          className="fixed inset-0 z-0 transition-opacity duration-700 ease-out opacity-0 pointer-events-none"
+        >
+          <div 
+            className="absolute inset-0 bg-cover bg-center blur-3xl scale-110"
+            style={{ backgroundImage: `url(/imgs/${previousImage})` }}
+          />
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+      )}
+      
+      {/* Current image layer (fading in) */}
+      <div 
+        className={`fixed inset-0 z-0 transition-opacity duration-700 ease-out pointer-events-none ${
+          displayedImage ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {(displayedImage || previousImage) && (
+          <>
+            <div 
+              className="absolute inset-0 bg-cover bg-center blur-3xl scale-110 transition-[background-image] duration-700 ease-out"
+              style={{ backgroundImage: `url(/imgs/${displayedImage || previousImage})` }}
+            />
+            <div className="absolute inset-0 bg-black/50" />
+          </>
+        )}
+      </div>
 
+      {/* Main Content */}
+      <div className="relative z-10">
       <div className="min-h-[2vh] md:min-h-[5vh]"></div>
       <div className="flex min-h-[80vh] md:min-h-[90vh] items-center justify-center mx-4 md:mx-10 font-sans bg-white rounded-[3vh] md:rounded-[5vh]">
 
@@ -208,27 +317,42 @@ export default function Home() {
         
       </div>
 
-      {/* Horizontal scroll section */}
-      <div ref={containerRef} className="h-[200vh] md:h-[300vh] relative">
-        <div className="sticky top-0 h-screen overflow-hidden flex flex-col justify-center">
+      {/* Infinite Marquee Section */}
+      <div className="h-screen relative overflow-hidden flex flex-col justify-center">
+        <div className="absolute top-8 md:top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10 w-full justify-center">
+          <span className="text-[10px] md:text-[0.7vw] opacity-40 font-mono tracking-widest">------- FEATURED ARTS -------</span>
+        </div>
 
-          <div className="absolute top-8 md:top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10 w-full justify-center">
-            
-            <span className="text-[10px] md:text-[0.7vw] opacity-40 font-mono tracking-widest">------- FEATURED ARTS -------</span>
-          </div>
-
+        <div 
+          ref={marqueeRef}
+          className="overflow-hidden w-full"
+        >
           <div 
-            ref={galleryRef} 
-            className="flex gap-4 md:gap-8 px-4 md:px-10 will-change-transform items-center h-full"
-            style={{ transition: "transform 0.1s cubic-bezier(0.33, 1, 0.68, 1)" }}
+            ref={marqueeInnerRef}
+            className="flex gap-4 md:gap-8 will-change-transform items-center"
+            style={{ width: 'fit-content' }}
           >
+            {/* First set of images */}
             {featuredImages.map((image, index) => (
-              <div key={image} className="flex-shrink-0 rounded-lg overflow-hidden group relative first:ml-0">
+              <div key={`first-${image}`} className="flex-shrink-0 rounded-lg overflow-hidden group relative">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-[3vh] md:rounded-[5vh]"></div>
                 <img 
                   src={`/imgs/featured/${image}`} 
                   alt={`artwork-${index + 1}`}
-                  className="h-[50vh] md:h-[85vh] w-auto object-cover rounded-[3vh] md:rounded-[5vh] transition-transform duration-700 shadow-sm" 
+                  className="h-[50vh] md:h-[75vh] w-auto object-cover rounded-[3vh] md:rounded-[5vh] transition-transform duration-700 shadow-sm" 
+                  draggable={false}
+                />
+              </div>
+            ))}
+            {/* Duplicate set for infinite loop */}
+            {featuredImages.map((image, index) => (
+              <div key={`second-${image}`} className="flex-shrink-0 rounded-lg overflow-hidden group relative">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-[3vh] md:rounded-[5vh]"></div>
+                <img 
+                  src={`/imgs/featured/${image}`} 
+                  alt={`artwork-${index + 1}`}
+                  className="h-[50vh] md:h-[75vh] w-auto object-cover rounded-[3vh] md:rounded-[5vh] transition-transform duration-700 shadow-sm" 
+                  draggable={false}
                 />
               </div>
             ))}
@@ -250,14 +374,22 @@ export default function Home() {
       <div ref={gallerySectionRef} className="px-4 md:px-10 py-8 md:py-16">
       
 
-        <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2 md:gap-4 space-y-2 md:space-y-4">
+        <div 
+          className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2 md:gap-4 space-y-2 md:space-y-4"
+          onMouseLeave={() => setHoveredImage(null)}
+        >
           {images.map((image, index) => (
             <div 
               key={image} 
               className="break-inside-avoid group cursor-pointer"
               onClick={() => setSelectedImage(image)}
+              onMouseEnter={() => setHoveredImage(image)}
             >
-              <div className="relative overflow-hidden rounded-xl md:rounded-2xl bg-white p-1 md:p-2">
+              <div className={`relative overflow-hidden rounded-xl md:rounded-2xl p-1 md:p-2 transition-all duration-500 ${
+                hoveredImage && hoveredImage !== image 
+                  ? 'bg-white/50 opacity-50' 
+                  : 'bg-white'
+              }`}>
                 <div className="absolute inset-1 md:inset-2 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-lg md:rounded-xl pointer-events-none"></div>
                 
                 <ProgressiveImage
@@ -454,7 +586,7 @@ export default function Home() {
       )}
 
       <div className="min-h-[5vh]"></div>
-
+      </div>{/* End of Main Content z-10 wrapper */}
     </div>
   );
 }
