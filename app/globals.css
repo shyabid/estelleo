@@ -3,6 +3,101 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Disable selection & image drag globally */
+html, body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+/* Hide scrollbar globally */
+html, body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / Edge legacy */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent;
+  -webkit-appearance: none;
+}
+::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent;
+  -webkit-appearance: none;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* Pink-themed range slider used in the DoodlePad toolbar */
+.pink-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+}
+.pink-slider:focus { outline: none; }
+.pink-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #ffd5e0;
+  border-radius: 9999px;
+  border: none;
+}
+.pink-slider::-moz-range-track {
+  height: 4px;
+  background: #ffd5e0;
+  border-radius: 9999px;
+  border: none;
+}
+.pink-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #ff87a0;
+  margin-top: -6px;
+  box-shadow: 0 2px 4px rgba(255, 135, 160, 0.25);
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.14s ease-out;
+}
+.pink-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 6px rgba(255, 135, 160, 0.35);
+}
+.pink-slider:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+  box-shadow: 0 4px 10px rgba(255, 135, 160, 0.4);
+}
+.pink-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #ff87a0;
+  box-shadow: 0 2px 4px rgba(255, 135, 160, 0.25);
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.14s ease-out;
+}
+.pink-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
 /* Lenis smooth scroll styles */
 html.lenis, html.lenis body {
   height: auto;

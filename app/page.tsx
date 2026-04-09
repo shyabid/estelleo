@@ -1,14 +1,23 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import Lenis from "lenis";
 import ProgressiveImage from "@/components/ProgressiveImage";
+import DoodlePad from "@/components/DoodlePad";
+import { motion, AnimatePresence } from "framer-motion";
+
+const SMOOTH_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+type Collection = { id: string; name: string; order: number };
 
 export default function Home() {
   const gallerySectionRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
   const lastScrollTime = useRef(0);
   const [featuredImages, setFeaturedImages] = useState<string[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [activeFilter, setActiveFilter] = useState<string>("__all__");
   
   // Infinite marquee state
   const marqueeRef = useRef<HTMLDivElement>(null);
@@ -21,16 +30,18 @@ export default function Home() {
 
   const [images, setImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [hoveredImage, setHoveredImage] = useState<string | null>(null);
-  const [displayedImage, setDisplayedImage] = useState<string | null>(null);
-  const [previousImage, setPreviousImage] = useState<string | null>(null);
-  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [imageDescriptions, setImageDescriptions] = useState<Record<string, { 
-    title?: string; 
-    description: string; 
+  // Shared-element morph: while non-null, the matching thumb and the
+  // lightbox center image share a layoutId, producing a smooth open animation.
+  const [morphId, setMorphId] = useState<string | null>(null);
+  // Hero swipe carousel: 0 = intro, 1 = doodle pad.
+  const [heroPanel, setHeroPanel] = useState<0 | 1>(0);
+  const [imageDescriptions, setImageDescriptions] = useState<Record<string, {
+    title?: string;
+    description: string;
     date?: string;
     color?: string;
     blurDataUrl?: string;
+    collections?: string[];
   }>>({});
 
   // Helper to calculate circular distance for the carousel
@@ -42,46 +53,6 @@ export default function Home() {
     return diff;
   };
 
-  // Handle smooth transitions for atmospheric background
-  useEffect(() => {
-    if (hoveredImage) {
-      // Clear any pending fade out
-      if (fadeTimeoutRef.current) {
-        clearTimeout(fadeTimeoutRef.current);
-        fadeTimeoutRef.current = null;
-      }
-      
-      // If we have a current displayed image, move it to previous for crossfade
-      if (displayedImage && displayedImage !== hoveredImage) {
-        setPreviousImage(displayedImage);
-      }
-      
-      // Set the new image
-      setDisplayedImage(hoveredImage);
-      
-      // Clear previous image after transition completes
-      setTimeout(() => {
-        setPreviousImage(null);
-      }, 700);
-    } else {
-      // Start fade out with delay
-      fadeTimeoutRef.current = setTimeout(() => {
-        setPreviousImage(displayedImage);
-        setDisplayedImage(null);
-        // Clear previous after fade completes
-        setTimeout(() => {
-          setPreviousImage(null);
-        }, 700);
-      }, 150); // Small delay before starting fade
-    }
-    
-    return () => {
-      if (fadeTimeoutRef.current) {
-        clearTimeout(fadeTimeoutRef.current);
-      }
-    };
-  }, [hoveredImage]);
-
   // Fetch image descriptions
   useEffect(() => {
     fetch("/api/data")
@@ -89,6 +60,50 @@ export default function Home() {
       .then((data) => setImageDescriptions(data))
       .catch((err) => console.error("Failed to load descriptions", err));
   }, []);
+
+  // Fetch collections
+  useEffect(() => {
+    fetch("/api/collections")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCollections([...data].sort((a, b) => a.order - b.order));
+        }
+      })
+      .catch(() => setCollections([]));
+  }, []);
+
+  // When filter changes, if current scroll position would leave us below the
+  // new (shorter) page, smoothly scroll up to the last valid position.
+  useEffect(() => {
+    // Wait for layout animations to settle before measuring
+    const checkAndScroll = () => {
+      const docHeight = document.documentElement.scrollHeight;
+      const viewportHeight = window.innerHeight;
+      const maxScroll = Math.max(0, docHeight - viewportHeight);
+      const currentScroll = window.scrollY;
+
+      if (currentScroll > maxScroll - 8) {
+        lenisRef.current?.scrollTo(maxScroll, {
+          duration: 1.1,
+          easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        });
+      }
+    };
+
+    // Measure a few times during the layout animation so we follow the
+    // content shrinking instead of snapping at the end.
+    const raf1 = requestAnimationFrame(checkAndScroll);
+    const t1 = setTimeout(checkAndScroll, 250);
+    const t2 = setTimeout(checkAndScroll, 550);
+    const t3 = setTimeout(checkAndScroll, 850);
+    return () => {
+      cancelAnimationFrame(raf1);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [activeFilter]);
 
   const getImageInfo = (imageName: string) => {
     return imageDescriptions[imageName] || {
@@ -204,6 +219,19 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedImage, images]);
 
+  // Open the lightbox with a shared-element morph from the clicked thumb.
+  // flushSync forces the thumb to render + register with framer's layoutId
+  // system *before* the lightbox mounts. Then setSelectedImage flips the
+  // thumb's layoutId back off and mounts the lightbox with the matching id —
+  // framer treats that as a source→target shared-element transition.
+  const openImage = (img: string) => {
+    flushSync(() => {
+      setMorphId(img);
+    });
+    setSelectedImage(img);
+    window.setTimeout(() => setMorphId(null), 800);
+  };
+
   const navigateImage = (direction: "prev" | "next") => {
     if (!selectedImage || images.length === 0) return;
     
@@ -258,63 +286,77 @@ export default function Home() {
   return (
     
     <div className="bg-pink-100/90 relative min-h-screen">
-      {/* Atmospheric Background - Crossfade Layers */}
-      {/* Previous image layer (fading out) */}
-      {previousImage && (
-        <div 
-          className="fixed inset-0 z-0 transition-opacity duration-700 ease-out opacity-0 pointer-events-none"
-        >
-          <div 
-            className="absolute inset-0 bg-cover bg-center blur-3xl scale-110"
-            style={{ backgroundImage: `url(/imgs/${previousImage})` }}
-          />
-          <div className="absolute inset-0 bg-black/50" />
-        </div>
-      )}
-      
-      {/* Current image layer (fading in) */}
-      <div 
-        className={`fixed inset-0 z-0 transition-opacity duration-700 ease-out pointer-events-none ${
-          displayedImage ? 'opacity-100' : 'opacity-0'
-        }`}
-      >
-        {(displayedImage || previousImage) && (
-          <>
-            <div 
-              className="absolute inset-0 bg-cover bg-center blur-3xl scale-110 transition-[background-image] duration-700 ease-out"
-              style={{ backgroundImage: `url(/imgs/${displayedImage || previousImage})` }}
-            />
-            <div className="absolute inset-0 bg-black/50" />
-          </>
-        )}
-      </div>
-
       {/* Main Content */}
       <div className="relative z-10">
       <div className="min-h-[2vh] md:min-h-[5vh]"></div>
-      <div className="flex min-h-[80vh] md:min-h-[90vh] items-center justify-center mx-4 md:mx-10 font-sans bg-white rounded-[3vh] md:rounded-[5vh]">
+      <div className="relative min-h-[80vh] md:min-h-[90vh] mx-4 md:mx-10 font-sans bg-white rounded-[3vh] md:rounded-[5vh] overflow-hidden">
+        {/* Swipeable two-panel carousel: intro → doodle pad */}
+        <motion.div
+          className="flex w-[200%] h-full absolute inset-0"
+          animate={{ x: heroPanel === 0 ? "0%" : "-50%" }}
+          transition={{ duration: 0.65, ease: SMOOTH_EASE }}
+        >
+          {/* Panel 0 — Intro */}
+          <div className="w-1/2 shrink-0 min-h-[80vh] md:min-h-[90vh] flex items-center justify-center relative">
+            <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-center md:text-left pointer-events-none">
+              {/* Image */}
+              <img
+                src="https://cdn.discordapp.com/emojis/1407426214548738048.webp?animated=true"
+                className="w-[20vw] md:w-[6vw] min-w-[60px] md:min-w-[40px]"
+                alt=""
+              />
+              {/* Text column */}
+              <div className="flex flex-col">
+                <p className="text-[8vw] md:text-[2vw] leading-none font-semibold">
+                  ESTELLEO
+                </p>
+                <p className="text-[3.5vw] md:text-[1vw] opacity-70 mt-2 md:mt-0">
+                  ★ ! 2007  ·  <u>Artist</u>  ˙  ENFJ
+                </p>
+              </div>
+            </div>
 
-        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-center md:text-left">
-          
-          {/* Image */}
-          <img
-            src="https://cdn.discordapp.com/emojis/1407426214548738048.webp?animated=true"
-            className="w-[20vw] md:w-[6vw] min-w-[60px] md:min-w-[40px]"
-            alt=""
-          />
-
-          {/* Text column */}
-          <div className="flex flex-col">
-            <p className="text-[8vw] md:text-[2vw] leading-none font-semibold">
-              ESTELLEO
-            </p>
-            <p className="text-[3.5vw] md:text-[1vw] opacity-70 mt-2 md:mt-0">
-              ★ ! 2007  ·  <u>Artist</u>  ˙  ENFJ 
-            </p>
+            {/* Top-right doodle hint (mirrors the back button on panel 1) */}
+            <button
+              onClick={() => setHeroPanel(1)}
+              className="absolute top-4 md:top-8 right-6 md:right-12 flex items-center gap-1 text-black/40 hover:text-black/80 transition-colors cursor-pointer"
+              aria-label="open doodle pad"
+            >
+              <span className="text-[9px] md:text-[10px] font-mono tracking-[0.3em] uppercase">
+                doodle
+              </span>
+              <motion.span
+                animate={{ x: [0, 4, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                className="text-lg md:text-xl leading-none inline-block"
+              >
+                →
+              </motion.span>
+            </button>
           </div>
 
+          {/* Panel 1 — Doodle Pad */}
+          <div className="w-1/2 shrink-0 min-h-[80vh] md:min-h-[90vh] relative">
+            <DoodlePad
+              active={heroPanel === 1}
+              onBack={() => setHeroPanel(0)}
+            />
+          </div>
+        </motion.div>
+
+        {/* Panel dots */}
+        <div className="absolute bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none">
+          <span
+            className={`h-1.5 rounded-full transition-all ${
+              heroPanel === 0 ? "w-6 bg-black/60" : "w-1.5 bg-black/20"
+            }`}
+          />
+          <span
+            className={`h-1.5 rounded-full transition-all ${
+              heroPanel === 1 ? "w-6 bg-black/60" : "w-1.5 bg-black/20"
+            }`}
+          />
         </div>
-        
       </div>
 
       {/* Infinite Marquee Section */}
@@ -370,201 +412,267 @@ export default function Home() {
       </div>
 
       {/* Gallery Grid */}
-      
-      <div ref={gallerySectionRef} className="px-4 md:px-10 py-8 md:py-16">
-      
 
-        <div 
+      <div ref={gallerySectionRef} className="px-4 md:px-10 py-8 md:py-16">
+
+        {/* Collection filter pills */}
+        {collections.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.6, ease: SMOOTH_EASE }}
+            className="flex flex-wrap justify-center gap-2 md:gap-3 mb-6 md:mb-10"
+          >
+            <CollectionPill
+              label="All"
+              active={activeFilter === "__all__"}
+              onClick={() => setActiveFilter("__all__")}
+            />
+            {collections.map((c) => (
+              <CollectionPill
+                key={c.id}
+                label={c.name}
+                active={activeFilter === c.id}
+                onClick={() => setActiveFilter(c.id)}
+              />
+            ))}
+          </motion.div>
+        )}
+
+        <AnimatePresence mode="wait">
+        <motion.div
+          key={activeFilter}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.55, ease: SMOOTH_EASE }}
           className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2 md:gap-4 space-y-2 md:space-y-4"
-          onMouseLeave={() => setHoveredImage(null)}
         >
-          {images.map((image, index) => (
-            <div 
-              key={image} 
-              className="break-inside-avoid group cursor-pointer"
-              onClick={() => setSelectedImage(image)}
-              onMouseEnter={() => setHoveredImage(image)}
+          {images
+            .filter((image) => {
+              if (activeFilter === "__all__") return true;
+              const imgColls = imageDescriptions[image]?.collections || [];
+              return imgColls.includes(activeFilter);
+            })
+            .map((image, index) => (
+            <motion.div
+              key={image}
+              className="break-inside-avoid cursor-pointer"
+              onClick={() => openImage(image)}
+              whileTap={{ scale: 0.975 }}
+              transition={{ duration: 0.35, ease: SMOOTH_EASE }}
             >
-              <div className={`relative overflow-hidden rounded-xl md:rounded-2xl p-1 md:p-2 transition-all duration-500 ${
-                hoveredImage && hoveredImage !== image 
-                  ? 'bg-white/50 opacity-50' 
-                  : 'bg-white'
-              }`}>
-                <div className="absolute inset-1 md:inset-2 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10 rounded-lg md:rounded-xl pointer-events-none"></div>
-                
+              <motion.div
+                layoutId={
+                  morphId === image && selectedImage !== image
+                    ? `morph-${image}`
+                    : undefined
+                }
+                transition={{ duration: 0.6, ease: SMOOTH_EASE }}
+                className="relative overflow-hidden rounded-xl md:rounded-2xl p-1 md:p-2 bg-white"
+                style={{ opacity: selectedImage === image ? 0 : 1 }}
+              >
                 <ProgressiveImage
                   src={`/imgs/${image}`}
                   placeholderColor={imageDescriptions[image]?.color}
                   blurDataUrl={imageDescriptions[image]?.blurDataUrl}
                   alt={`artwork-${index + 1}`}
-                  className="w-full h-auto rounded-lg md:rounded-xl transition-transform duration-700"
+                  className="w-full h-auto rounded-lg md:rounded-xl"
                 />
-
-                {/* Hover overlay with number */}
-                <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-                  <span className="text-white text-[10px] md:text-xs font-mono bg-black/30 px-1.5 md:px-2 py-0.5 md:py-1 rounded-full backdrop-blur-sm">
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Immersive Lightbox Carousel */}
+      <AnimatePresence>
       {selectedImage && (
-        <div 
+        <motion.div
+          key="lightbox"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5, ease: SMOOTH_EASE }}
           className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/90 backdrop-blur-md"
           onClick={() => setSelectedImage(null)}
         >
-          {/* Background Blur of Current Image */}
-          <div 
-            className="absolute inset-0 z-0 opacity-20 blur-3xl scale-110 transition-all duration-700 ease-in-out"
-            style={{ backgroundImage: `url(/imgs/${selectedImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-          ></div>
+          {/* Background Blur of Current Image - crossfades on change */}
+          <AnimatePresence mode="sync">
+            <motion.div
+              key={selectedImage}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.2 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.9, ease: SMOOTH_EASE }}
+              className="absolute inset-0 z-0 blur-3xl scale-110 pointer-events-none"
+              style={{ backgroundImage: `url(/imgs/${selectedImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+            />
+          </AnimatePresence>
 
           {/* Close button */}
-          <button 
+          <motion.button
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.5, delay: 0.15, ease: SMOOTH_EASE }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.9 }}
             className="absolute top-4 md:top-8 right-4 md:right-8 text-white/60 hover:text-white transition-colors text-xl md:text-2xl z-50"
-            onClick={() => setSelectedImage(null)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedImage(null);
+            }}
           >
             ✕
-          </button>
+          </motion.button>
 
           {/* Image counter */}
-          <div className="absolute top-4 md:top-8 left-1/2 -translate-x-1/2 z-50">
-            <span className="text-white/40 text-xs md:text-sm font-mono tracking-widest">
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.5, delay: 0.15, ease: SMOOTH_EASE }}
+            className="absolute top-4 md:top-8 left-1/2 -translate-x-1/2 z-50"
+          >
+            <span className="text-white/40 text-xs md:text-sm font-mono tracking-widest tabular-nums">
               {String(images.indexOf(selectedImage) + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}
             </span>
-          </div>
+          </motion.div>
 
           {/* Carousel Container */}
           <div className="relative w-full h-full flex items-center justify-center">
             {images.map((image, index) => {
               const currentIndex = images.indexOf(selectedImage);
               const offset = getDistanceFromCenter(index, currentIndex, images.length);
-              
+
               // Optimization: Only render items within visible range + buffer
               if (Math.abs(offset) > 2) return null;
 
               // Determine styles based on offset
               let styles = "";
-              
+
               if (offset === 0) {
-                // Center - shifted left to make room for description on desktop
-                // On mobile: centered
                 styles = "z-30 opacity-100 scale-100 left-1/2 md:left-[40%]";
               } else if (offset === -1) {
-                // Left - fixed position near left edge
                 styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[0%] md:left-[0%] hidden md:flex";
               } else if (offset === 1) {
-                // Right - fixed position near right edge
                 styles = "z-20 opacity-60 scale-75 blur-[3px] hover:opacity-75 cursor-pointer left-[100%] md:left-[100%] hidden md:flex";
               } else if (offset === -2) {
-                // Far Left (hidden)
-                styles = "z-10 opacity-0 scale-50 left-[-20%]";
+                styles = "z-10 opacity-0 scale-50 left-[-20%] pointer-events-none";
               } else if (offset === 2) {
-                // Far Right (hidden)
-                styles = "z-10 opacity-0 scale-50 left-[120%]";
+                styles = "z-10 opacity-0 scale-50 left-[120%] pointer-events-none";
               }
 
+              const isMorphTarget = offset === 0 && morphId === image;
               return (
                 <div
                   key={image}
-                  className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] flex items-center justify-center ${styles}`}
+                  className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] flex items-center justify-center will-change-transform ${styles}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (offset !== 0) setSelectedImage(image);
                   }}
                 >
                   {/* Image Container */}
-                  <div className="relative shadow-2xl flex flex-col items-center">
+                  <motion.div
+                    layoutId={isMorphTarget ? `morph-${image}` : undefined}
+                    transition={{ duration: 0.6, ease: SMOOTH_EASE }}
+                    className="relative shadow-2xl flex flex-col items-center"
+                  >
                     <img
                       src={`/imgs/${image}`}
                       alt="artwork"
                       className="max-h-[60vh] md:max-h-[80vh] max-w-[90vw] md:max-w-[45vw] object-contain rounded-xl md:rounded-2xl bg-black/20"
+                      draggable={false}
                     />
-                    
-                    {/* Description Panel */}
-                    <div 
-                      className={`
-                        transition-all duration-500 delay-100
-                        ${offset === 0 ? "opacity-100 translate-y-0 md:translate-x-0" : "opacity-0 translate-y-10 md:-translate-x-10 pointer-events-none"}
-                        
-                        /* Mobile Styles: Bottom Sheet */
-                        fixed bottom-0 left-0 w-full p-6 pb-10
-                        bg-gradient-to-t from-black via-black/90 to-transparent
-                        text-center flex flex-col items-center
-                        
-                        /* Desktop Styles: Side Panel */
-                        md:absolute md:top-1/2 md:bottom-auto md:left-full md:right-auto 
-                        md:-translate-y-1/2 md:ml-8 md:w-[22vw] md:bg-none md:p-0 md:text-left md:items-start
-                      `}
-                    >
-                      <div className="flex flex-col gap-2 md:gap-5 text-white w-full max-w-md md:max-w-none mx-auto">
-                        <div className="flex flex-col gap-1 md:gap-2">
-                          <span className="text-[10px] md:text-xs opacity-40 tracking-widest uppercase">Artwork</span>
-                          <h2 className="text-xl md:text-2xl font-light tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
-                            {getImageInfo(image).title}
-                          </h2>
-                        </div>
-                        <div className="h-[1px] w-10 md:w-14 bg-white/20 mx-auto md:mx-0"></div>
-                        <p className="text-sm md:text-base opacity-60 leading-relaxed line-clamp-4 md:line-clamp-6 w-80">
-                          {getImageInfo(image).description}
-                        </p>
-                        {getImageInfo(image).date && (
-                          <div className="flex items-center gap-2 justify-center md:justify-start">
-                            <div className="w-1.5 h-1.5 rounded-full bg-pink-400/60"></div>
-                            <span className="text-xs md:text-sm opacity-40">
-                              {getImageInfo(image).date}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  </motion.div>
                 </div>
               );
             })}
           </div>
 
-          {/* Navigation Arrows */}
+          {/* Invisible side click zones — always clickable, even mid-animation */}
           <button
-            className="absolute left-3 md:left-8 top-1/2 -translate-y-1/2 z-40 w-10 h-10 md:w-14 md:h-14 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/40 hover:text-white transition-all duration-200 backdrop-blur-sm border border-white/10"
+            aria-label="previous"
+            className="hidden md:block absolute left-0 top-0 h-full w-[20%] z-[35] cursor-pointer bg-transparent"
             onClick={(e) => {
               e.stopPropagation();
               navigateImage("prev");
             }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
+          />
           <button
-            className="absolute right-3 md:right-8 top-1/2 -translate-y-1/2 z-40 w-10 h-10 md:w-14 md:h-14 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/40 hover:text-white transition-all duration-200 backdrop-blur-sm border border-white/10"
+            aria-label="next"
+            className="hidden md:block absolute right-0 top-0 h-full w-[20%] z-[35] cursor-pointer bg-transparent"
             onClick={(e) => {
               e.stopPropagation();
               navigateImage("next");
             }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          />
 
-          {/* Bottom progress bar */}
-          <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1">
+          {/* Description Panel - crossfades on image change */}
+          <div className="pointer-events-none">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedImage}
+                initial={{ opacity: 0, y: 16, filter: "blur(6px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -12, filter: "blur(6px)" }}
+                transition={{ duration: 0.55, ease: SMOOTH_EASE }}
+                className="
+                  fixed bottom-0 left-0 w-full p-6 pb-10
+                  bg-gradient-to-t from-black via-black/90 to-transparent
+                  text-center flex flex-col items-center z-40
+                  md:absolute md:top-1/2 md:bottom-auto md:left-[calc(40%+22vw)] md:right-auto
+                  md:-translate-y-1/2 md:ml-2 md:w-[22vw] md:bg-none md:p-0 md:text-left md:items-start
+                "
+              >
+                <div className="flex flex-col gap-2 md:gap-5 text-white w-full max-w-md md:max-w-none mx-auto">
+                  <div className="flex flex-col gap-1 md:gap-2">
+                    <span className="text-[10px] md:text-xs opacity-40 tracking-widest uppercase">Artwork</span>
+                    <h2 className="text-xl md:text-2xl font-light tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
+                      {getImageInfo(selectedImage).title}
+                    </h2>
+                  </div>
+                  <div className="h-[1px] w-10 md:w-14 bg-white/20 mx-auto md:mx-0"></div>
+                  <p className="text-sm md:text-base opacity-60 leading-relaxed line-clamp-4 md:line-clamp-6 w-80 max-w-full">
+                    {getImageInfo(selectedImage).description}
+                  </p>
+                  {getImageInfo(selectedImage).date && (
+                    <div className="flex items-center gap-2 justify-center md:justify-start">
+                      <div className="w-1.5 h-1.5 rounded-full bg-pink-400/60"></div>
+                      <span className="text-xs md:text-sm opacity-40">
+                        {getImageInfo(selectedImage).date}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Navigation Arrows */}
+          {/* Bottom progress */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.55, delay: 0.2, ease: SMOOTH_EASE }}
+            className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1"
+          >
             {images.length <= 20 ? (
-              images.map((img, idx) => (
-                <button
+              images.map((img) => (
+                <motion.button
                   key={img}
-                  className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-all duration-300 ${
-                    img === selectedImage 
-                      ? "bg-white w-4 md:w-6" 
-                      : "bg-white/30 hover:bg-white/50"
-                  }`}
+                  whileTap={{ scale: 0.85 }}
+                  className="h-1.5 md:h-2 rounded-full"
+                  animate={{
+                    width: img === selectedImage ? (typeof window !== "undefined" && window.innerWidth >= 768 ? 24 : 16) : (typeof window !== "undefined" && window.innerWidth >= 768 ? 8 : 6),
+                    backgroundColor: img === selectedImage ? "rgba(255,255,255,1)" : "rgba(255,255,255,0.3)",
+                  }}
+                  transition={{ duration: 0.55, ease: SMOOTH_EASE }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedImage(img);
@@ -574,19 +682,47 @@ export default function Home() {
             ) : (
               <div className="flex items-center gap-3">
                 <div className="w-32 md:w-48 h-0.5 bg-white/20 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-white/60 rounded-full transition-all duration-300"
-                    style={{ width: `${((images.indexOf(selectedImage) + 1) / images.length) * 100}%` }}
-                  ></div>
+                  <motion.div
+                    className="h-full bg-white/70 rounded-full"
+                    animate={{ width: `${((images.indexOf(selectedImage) + 1) / images.length) * 100}%` }}
+                    transition={{ duration: 0.7, ease: SMOOTH_EASE }}
+                  />
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       <div className="min-h-[5vh]"></div>
       </div>{/* End of Main Content z-10 wrapper */}
     </div>
+  );
+}
+
+function CollectionPill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      className="relative text-[10px] md:text-xs uppercase tracking-[0.2em] px-4 md:px-5 py-2 md:py-2.5 rounded-full text-black"
+    >
+      {active && (
+        <motion.span
+          layoutId="home-filter-active"
+          className="absolute inset-0 bg-white rounded-full"
+          transition={{ duration: 0.55, ease: SMOOTH_EASE }}
+        />
+      )}
+      <span className="relative font-medium">{label}</span>
+    </motion.button>
   );
 }
